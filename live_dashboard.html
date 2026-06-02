@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Galaxy Campaign Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* ── BASE ─────────────────────────────────────────────────────────── */
+:root{--bg:#f4f5f7;--card:#fff;--ink:#1b1b1f;--muted:#6b7280;--s26:#1428a0;
+  --kpi:#e0991b;--act:#1428a0;--earn:#3aa76d;--s25:#9aa0ab;--line:#e6e8ec;
+  --good:#0a7a44;--bad:#b42318}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Segoe UI","Helvetica Neue",Arial,sans-serif;background:var(--bg);
+  color:var(--ink);-webkit-font-smoothing:antialiased}
+
+/* ── CONNECT OVERLAY ─────────────────────────────────────────────── */
+#overlay{position:fixed;inset:0;background:#0b0f1a;display:flex;align-items:center;
+  justify-content:center;z-index:1000;padding:24px}
+.conn-card{background:#fff;border-radius:20px;padding:40px 44px;max-width:520px;width:100%;
+  box-shadow:0 24px 60px rgba(0,0,0,.35)}
+.conn-logo{font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--s26);margin-bottom:28px}
+.conn-card h1{font-size:24px;font-weight:800;line-height:1.2;margin-bottom:8px}
+.conn-card p{font-size:14px;color:var(--muted);line-height:1.6;margin-bottom:24px}
+.conn-input{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:12px 14px;
+  font-size:14px;outline:none;transition:.15s;font-family:inherit}
+.conn-input:focus{border-color:var(--s26);box-shadow:0 0 0 3px rgba(20,40,160,.1)}
+.conn-btn{margin-top:12px;width:100%;background:var(--s26);color:#fff;border:none;
+  border-radius:10px;padding:13px;font-size:15px;font-weight:700;cursor:pointer;
+  transition:.15s;font-family:inherit}
+.conn-btn:hover{background:#0f1e80}
+.conn-note{margin-top:16px;font-size:12px;color:var(--muted);line-height:1.5}
+.conn-note b{color:var(--ink)}
+.conn-err{margin-top:10px;font-size:12.5px;color:var(--bad);display:none}
+
+/* ── LOADING ──────────────────────────────────────────────────────── */
+#loading{position:fixed;inset:0;background:var(--bg);display:none;align-items:center;
+  justify-content:center;flex-direction:column;gap:16px;z-index:900}
+.spinner{width:36px;height:36px;border:3px solid var(--line);border-top-color:var(--s26);
+  border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading p{font-size:14px;color:var(--muted);font-weight:600}
+
+/* ── ERROR ────────────────────────────────────────────────────────── */
+#error-wrap{position:fixed;inset:0;background:var(--bg);display:none;align-items:center;
+  justify-content:center;padding:24px;z-index:900}
+.err-card{background:#fff;border-radius:16px;padding:36px 40px;max-width:480px;
+  text-align:center;border:1.5px solid #f3cdc9}
+.err-card h2{color:var(--bad);font-size:20px;margin-bottom:10px}
+.err-card p{color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:20px}
+.err-card button{background:var(--s26);color:#fff;border:none;border-radius:8px;
+  padding:10px 22px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+
+/* ── APP ──────────────────────────────────────────────────────────── */
+#app{display:none;padding:32px 24px 56px;min-height:100vh}
+.wrap{max-width:1180px;margin:0 auto}
+.topbar{display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap}
+.topbar .sam{font-weight:800;letter-spacing:.5px;color:var(--s26);font-size:14px;text-transform:uppercase}
+.topbar .sep{flex:1;height:1px;background:var(--line)}
+.topbar .date{font-size:12px;color:var(--muted)}
+.topbar .refresh-btn{background:none;border:1px solid var(--line);border-radius:7px;
+  padding:5px 12px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;
+  font-family:inherit;transition:.15s}
+.topbar .refresh-btn:hover{border-color:var(--s26);color:var(--s26)}
+.topbar .change-btn{background:none;border:none;font-size:12px;color:var(--muted);
+  cursor:pointer;font-family:inherit;text-decoration:underline}
+h1{font-size:13px;color:var(--muted);font-weight:600;margin-top:4px}
+.tabs{display:flex;gap:5px;margin-top:20px;flex-wrap:wrap}
+.tab{padding:10px 22px;font-size:13.5px;font-weight:700;border:1px solid var(--line);
+  border-bottom:none;border-radius:10px 10px 0 0;background:#eceef1;color:var(--muted);
+  cursor:pointer;transition:.15s;position:relative;top:1px}
+.tab.active{background:var(--card);color:var(--s26);border-color:var(--line)}
+.tab.active::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;
+  background:var(--s26);border-radius:2px}
+
+/* ── PANELS ───────────────────────────────────────────────────────── */
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;
+  padding:24px 26px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+.panel+.panel,.grid2{margin-top:18px}
+.panel.first{border-top-left-radius:0}
+.panel-head{display:flex;align-items:baseline;gap:12px;margin-bottom:4px}
+.panel-head .num{background:var(--s26);color:#fff;font-weight:700;border-radius:5px;
+  padding:1px 9px;font-size:15px}
+.panel-head h2{font-size:20px;font-weight:800}
+.panel-sub{font-size:12px;color:var(--muted);margin-bottom:20px}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}
+.cards.c4{grid-template-columns:repeat(4,1fr)}
+.cards.c5{grid-template-columns:repeat(5,1fr)}
+.kpi{background:#fafbfc;border:1px solid var(--line);border-radius:12px;padding:15px 16px}
+.kpi .lbl{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.2px}
+.kpi .val{font-size:27px;font-weight:800;margin-top:7px;line-height:1}
+.kpi .sub{font-size:11px;color:var(--muted);margin-top:5px}
+.kpi.hl .val{color:var(--s26)}
+.kpi .tag{display:inline-block;margin-top:7px;font-size:10.5px;font-weight:700;
+  color:var(--good);background:#e7f5ee;padding:2px 8px;border-radius:20px}
+.kpi .tag.neg{color:var(--bad);background:#fdeceb}
+.chart-box{position:relative;height:420px}
+.chart-box.sm{height:330px}
+.legend{display:flex;gap:20px;justify-content:center;margin-top:14px;font-size:12.5px;
+  color:#444;flex-wrap:wrap}
+.legend span{display:inline-flex;align-items:center;gap:7px;font-weight:600}
+.dot{width:12px;height:12px;border-radius:3px;display:inline-block}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:4px}
+th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+thead th{background:#fafbfc;color:var(--muted);font-weight:700;font-size:10.5px;
+  text-transform:uppercase;letter-spacing:.4px}
+tbody tr:hover{background:#f8f9fb}
+td.acc{color:var(--s26);font-weight:700}
+td.idx{color:var(--good);font-weight:700}
+td.idx.neg{color:var(--bad)}
+.note{font-size:11.5px;color:var(--muted);margin-top:13px;line-height:1.5}
+.grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:18px}
+.grid2.even{grid-template-columns:1fr 1fr}
+@media(max-width:900px){.grid2,.grid2.even{grid-template-columns:1fr}
+  .cards,.cards.c4,.cards.c5{grid-template-columns:1fr 1fr}}
+.view{display:none}.view.active{display:block}
+
+/* ── SUMMARY ─────────────────────────────────────────────────────── */
+.headline{font-size:15px;line-height:1.6;background:#f7f9ff;border:1px solid #dfe4f5;
+  border-radius:10px;padding:14px 16px;margin-bottom:18px}
+.headline b{color:var(--s26)}
+.stagecards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0 20px}
+.stagecard{border:1px solid var(--line);border-radius:12px;padding:14px 16px;position:relative}
+.stagecard .st{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.stagecard .iv{font-size:30px;font-weight:800;margin-top:6px;line-height:1}
+.stagecard .sb{font-size:11px;color:var(--muted);margin-top:5px}
+.stagecard .arrow{position:absolute;right:-10px;top:50%;transform:translateY(-50%);
+  font-size:18px;color:#c3c8d1;z-index:2}
+@media(max-width:900px){.stagecards{grid-template-columns:1fr}.stagecard .arrow{display:none}}
+
+/* ── OBSERVATIONS ────────────────────────────────────────────────── */
+.observ{background:linear-gradient(180deg,#f7f9ff,#fafbfc);border:1px solid #dfe4f5}
+.observ .panel-head .num{background:#0a7a44}
+.observ ul{list-style:none;margin-top:6px}
+.observ li{position:relative;padding:7px 0 7px 26px;font-size:13px;line-height:1.5;
+  border-bottom:1px dashed #e6e8ec}
+.observ li:last-child{border-bottom:none}
+.observ li::before{content:"";position:absolute;left:6px;top:13px;width:8px;height:8px;
+  border-radius:2px;background:var(--s26);transform:rotate(45deg)}
+.observ li.up::before{background:var(--good)}
+.observ li.down::before{background:var(--bad)}
+.observ b{color:var(--s26)}
+
+/* ── PHASE STRIP ──────────────────────────────────────────────────── */
+.phasebar{display:flex;gap:4px;margin:0 0 16px}
+.phasebar .ph{flex:1;border-radius:7px;padding:7px 9px;color:#fff;text-align:center;line-height:1.25}
+.phasebar .ph b{display:block;font-size:11.5px;font-weight:800;color:#fff}
+.phasebar .ph span{font-size:10px;opacity:.9}
+@media(max-width:900px){.phasebar{flex-wrap:wrap}.phasebar .ph{flex:1 1 30%}}
+.stagehead td{color:#fff!important;font-weight:700;font-size:11px;
+  text-transform:uppercase;letter-spacing:.5px;border-bottom:none}
+td.metric{padding-left:22px;color:#374151}
+</style>
+</head>
+<body>
+
+<!-- ════════════════ CONNECT OVERLAY ════════════════ -->
+<div id="overlay">
+  <div class="conn-card">
+    <div class="conn-logo">Samsung · Galaxy Dashboard</div>
+    <h1>Connect your Google Sheet</h1>
+    <p>Paste the URL or ID of your Google Sheet below. The dashboard will fetch live data every time you open it — no backend required.</p>
+    <input id="sheetInput" class="conn-input" placeholder="https://docs.google.com/spreadsheets/d/YOUR_ID/edit …" />
+    <button class="conn-btn" onclick="connectSheet()">Connect &amp; Load Dashboard →</button>
+    <div id="connErr" class="conn-err"></div>
+    <div class="conn-note">
+      <b>Before connecting:</b> your sheet must be set to <b>"Anyone with link → Viewer"</b> (Share button → Change to anyone with link).<br><br>
+      <b>Required sheet tabs:</b> <code>WeeklyData</code> &nbsp;·&nbsp; <code>Totals</code> &nbsp;·&nbsp; <code>BuzzYoY</code><br>
+      See the <b>README tab</b> in the template sheet for column definitions.
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ LOADING ════════════════ -->
+<div id="loading" style="display:none;position:fixed;inset:0;background:var(--bg);
+  display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px;z-index:900">
+  <div class="spinner"></div>
+  <p style="font-size:14px;color:var(--muted);font-weight:600">Connecting to Google Sheets…</p>
+</div>
+
+<!-- ════════════════ ERROR ════════════════ -->
+<div id="error-wrap" style="display:none;position:fixed;inset:0;background:var(--bg);
+  align-items:center;justify-content:center;padding:24px;z-index:900">
+  <div class="err-card">
+    <h2>⚠️ Could not load data</h2>
+    <p id="errMsg">Unknown error.</p>
+    <button onclick="showConnect()">Change Sheet ID</button>
+    &nbsp;&nbsp;
+    <button onclick="init()" style="background:#6b7280">Retry</button>
+  </div>
+</div>
+
+<!-- ════════════════ APP ════════════════ -->
+<div id="app">
+  <div class="wrap">
+    <div class="topbar">
+      <span class="sam">Samsung · Galaxy Dashboard</span>
+      <span class="sep"></span>
+      <span class="date" id="lastUpdated">—</span>
+      <button class="refresh-btn" onclick="refresh()">↺ Refresh</button>
+      <button class="change-btn" onclick="showConnect()">Change Sheet</button>
+    </div>
+    <h1 id="appTitle">Live Campaign Performance (Actual vs KPI)</h1>
+    <div class="tabs" id="tabs"></div>
+    <div id="views"></div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   CONFIG
+═══════════════════════════════════════════════════════════════════ */
+let SHEET_ID = localStorage.getItem('gd_sheetId') || '';
+
+function extractId(input) {
+  const m = input.match(/\/d\/([a-zA-Z0-9_-]{20,})/);
+  return m ? m[1] : input.trim();
+}
+
+function connectSheet() {
+  const raw = document.getElementById('sheetInput').value.trim();
+  if (!raw) { showConnErr('Please paste your Sheet URL or ID.'); return; }
+  const id = extractId(raw);
+  if (id.length < 20) { showConnErr('That doesn\'t look like a valid Sheet ID. Try pasting the full URL.'); return; }
+  SHEET_ID = id;
+  localStorage.setItem('gd_sheetId', SHEET_ID);
+  hideOverlay();
+  init();
+}
+
+function showConnErr(msg) {
+  const el = document.getElementById('connErr');
+  el.textContent = msg; el.style.display = 'block';
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   GOOGLE SHEETS FETCH  (gviz/tq — no API key needed)
+═══════════════════════════════════════════════════════════════════ */
+async function gvizFetch(sheetName) {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status} fetching sheet "${sheetName}"`);
+  const text = await res.text();
+  // gviz wraps response in  /*O_o*/google.visualization.Query.setResponse({…});
+  const json = JSON.parse(text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)[1]);
+  if (json.status === 'error') {
+    const msg = json.errors?.[0]?.detailed_message || json.errors?.[0]?.message || 'Unknown gviz error';
+    throw new Error(`Sheet "${sheetName}": ${msg}`);
+  }
+  return parseGviz(json);
+}
+
+function parseGviz(json) {
+  const cols = json.table.cols.map(c => c.label || c.id);
+  return (json.table.rows || []).map(row =>
+    Object.fromEntries(cols.map((h, i) => [h, row.c?.[i]?.v ?? null]))
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DATA PROCESSING
+═══════════════════════════════════════════════════════════════════ */
+// Global data — set by processData(), consumed by renderers
+let SOCIAL_TOT, SOCIAL_OUTCOME_ACC, SOCIAL_SPLIT;
+let SMC_TOT, SMC_ACC, SMC_WK, SMC_ER_WK;
+let MEDIA_TOT, MEDIA_REACH_WK, QV_WK, QVR_WK;
+let INF_TOT, INF_PR_ACC, INF_OUTCOME_ACC, INF_ER_WK;
+let BUZZ_TOTAL, BUZZ_ORGANIC;
+let FUNNEL;
+
+const r2 = n => Math.round(n * 100) / 100;
+const safe = (a, b) => (b && b !== 0) ? r2(a / b) : null;
+
+function processData(weeklyRows, totalsRows, buzzRows) {
+  /* ── Totals dictionary: T['Media_QV'] = {kpi, act, idx, e1, e2} ── */
+  const T = {};
+  totalsRows.forEach(r => {
+    if (r.Metric_Name) T[r.Metric_Name] = {kpi:r.KPI, act:r.Actual, idx:r.Index, e1:r.Extra1, e2:r.Extra2};
+  });
+
+  /* ── Weekly helpers ── */
+  function accum(actKey, kpiKey) {
+    let aa=0, ak=0, started=false;
+    const out=[];
+    for (const r of weeklyRows) {
+      const a=r[actKey], k=r[kpiKey];
+      if (!started && a==null && k==null) continue;
+      if (started  && a==null && k==null) break;
+      started=true; aa+=(a||0); ak+=(k||0);
+      out.push({week:r.Week, act_acc:r2(aa), kpi_acc:r2(ak), idx:ak?r2(aa/ak):null});
+    }
+    return out;
+  }
+  function weeklyCount(actKey, kpiKey) {
+    return weeklyRows.filter(r=>r[actKey]!=null||r[kpiKey]!=null)
+      .map(r=>({week:r.Week, act:r2(r[actKey]||0), kpi:r2(r[kpiKey]||0)}));
+  }
+  function weeklyRate(actKey, kpiKey) {
+    return weeklyRows.filter(r=>r[actKey]!=null||r[kpiKey]!=null)
+      .map(r=>({week:r.Week, act:r[actKey], kpi:r[kpiKey]}));
+  }
+
+  /* ── SOCIAL ── */
+  SOCIAL_TOT = {
+    buzz_act:T.Buzz?.act,       buzz_kpi:T.Buzz?.kpi,       buzz_idx:T.Buzz?.idx,
+    q_act:T.Quality?.act,       q_kpi:T.Quality?.kpi,       q_idx:T.Quality?.idx,
+    sent_act:T.Sentiment?.act,  sent_kpi:T.Sentiment?.kpi,  sent_idx:T.Sentiment?.idx,
+    out_act:T.SO_Outcome?.act,  out_kpi:T.SO_Outcome?.kpi,  out_idx:T.SO_Outcome?.idx,
+    paid_act:T.SO_Paid?.act,    paid_kpi:T.SO_Paid?.kpi,
+    foc_act:T.SO_FOC?.act,      foc_kpi:T.SO_FOC?.kpi
+  };
+  SOCIAL_OUTCOME_ACC = accum('SO_Out_Act','SO_Out_KPI');
+  SOCIAL_SPLIT = weeklyRows
+    .filter(r=>r.SO_Paid_Out!=null||r.SO_FOC_Out!=null)
+    .map(r=>({week:r.Week, paid:r.SO_Paid_Out||0, foc:r.SO_FOC_Out||0}));
+
+  /* ── SMC ── */
+  SMC_ACC = accum('SMC_Out_Act','SMC_Out_KPI');
+  SMC_WK  = weeklyCount('SMC_Out_Act','SMC_Out_KPI');
+  SMC_ER_WK = weeklyRate('SMC_ER_Act','SMC_ER_KPI');
+  SMC_TOT = {
+    out_act:T.SMC_Outcome?.act, out_kpi:T.SMC_Outcome?.kpi, out_idx:T.SMC_Outcome?.idx,
+    er_act:T.SMC_ER?.act,       er_kpi:T.SMC_ER?.kpi,       er_idx:T.SMC_ER?.idx
+  };
+
+  /* ── MEDIA ── */
+  MEDIA_REACH_WK = weeklyCount('Reach_Act','Reach_KPI');
+  QV_WK  = weeklyRate('QV_Act','QV_KPI');
+  QVR_WK = weeklyRate('QVR_Act','QVR_KPI');
+  MEDIA_TOT = {
+    reach_act:T.Media_Reach?.act, reach_kpi:T.Media_Reach?.kpi, reach_idx:T.Media_Reach?.idx,
+    reachpct_act:T.Media_ReachPct?.act, reachpct_kpi:T.Media_ReachPct?.kpi,
+    qv_act:T.Media_QV?.act,   qv_kpi:T.Media_QV?.kpi,   qv_idx:T.Media_QV?.idx,
+    qvr_act:T.Media_QVR?.act, qvr_kpi:T.Media_QVR?.kpi, qvr_idx:T.Media_QVR?.idx,
+    po_act:T.Media_PO?.act,   po_kpi:T.Media_PO?.kpi,   po_idx:T.Media_PO?.idx,
+    dc_act:T.Media_DC?.act,   dc_kpi:T.Media_DC?.kpi,   dc_idx:T.Media_DC?.idx,
+    ts_act:T.Media_TS?.act,   ts_kpi:T.Media_TS?.kpi,   ts_idx:T.Media_TS?.idx,
+    budget_act:T.Budget?.act, budget_kpi:T.Budget?.kpi
+  };
+
+  /* ── INF ── */
+  INF_PR_ACC      = accum('INF_PR_Act','INF_PR_KPI');
+  INF_OUTCOME_ACC = accum('INF_Out_Act','INF_Out_KPI');
+  INF_ER_WK       = weeklyRate('INF_ER_Act','INF_ER_KPI');
+  const erPairs   = INF_ER_WK.filter(r=>r.act&&r.act!==0);
+  const erPeak    = erPairs.length ? erPairs.reduce((mx,r)=>r.act>mx.act?r:mx) : {week:'—',act:0};
+  INF_TOT = {
+    pr_act:T.INF_PR?.act,       pr_kpi:T.INF_PR?.kpi,       pr_idx:T.INF_PR?.idx,
+    out_act:T.INF_Outcome?.act, out_kpi:T.INF_Outcome?.kpi, out_idx:T.INF_Outcome?.idx,
+    views_act:T.INF_Views?.act, views_kpi:T.INF_Views?.kpi, views_idx:T.INF_Views?.idx,
+    paid:T.INF_Paid?.act,       earn:T.INF_Earn?.act,
+    er_act:T.INF_ER?.act, er_kpi:T.INF_ER?.kpi, er_idx:T.INF_ER?.idx,
+    er_peak:r2(erPeak.act), er_peak_wk:erPeak.week
+  };
+
+  /* ── BUZZ YoY ── */
+  BUZZ_TOTAL = buzzRows.filter(r=>r.Type==='Total')
+    .map(r=>({week:r.Week, s26_acc:r.S26F_Acc, s25_acc:r.S25F_Acc, yoy:r.YoY}));
+  BUZZ_ORGANIC = buzzRows.filter(r=>r.Type==='Organic')
+    .map(r=>({week:r.Week, s26_acc:r.S26F_Acc, s25_acc:r.S25F_Acc, yoy:r.YoY}));
+
+  /* ── FUNNEL (fully live from Totals) ── */
+  const fi = key => T[key]?.idx || null;
+  FUNNEL = [
+    {stage:'Awareness',    label:'INF Potential Reach',        idx:fi('INF_PR')},
+    {stage:'Awareness',    label:'Social Buzz',                 idx:fi('Buzz')},
+    {stage:'Awareness',    label:'PR Articles',                 idx:fi('PR_Outcome')},
+    {stage:'Awareness',    label:'Media Reach',                 idx:fi('Media_Reach')},
+    {stage:'Consideration',label:'INF Views',                   idx:fi('INF_Views')},
+    {stage:'Consideration',label:'Quality Buzz',                idx:fi('Quality')},
+    {stage:'Consideration',label:'Media QV (qualified views)',  idx:fi('Media_QV')},
+    {stage:'Consideration',label:'QVR',                         idx:fi('Media_QVR')},
+    {stage:'Purchase',     label:'Paid Order (total)',          idx:fi('Media_PO')},
+    {stage:'Purchase',     label:'Dot.com',                     idx:fi('Media_DC')},
+    {stage:'Purchase',     label:'Tiktok Shop',                 idx:fi('Media_TS')}
+  ].filter(f=>f.idx!==null);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   FORMATTING
+═══════════════════════════════════════════════════════════════════ */
+const fmtM = v=>{if(v==null)return'–';const n=Math.round(v);return Math.abs(n)>=1e6?(n/1e6).toFixed(2)+'M':Math.abs(n)>=1e3?(n/1e3).toFixed(1)+'K':''+n;};
+const fmtN = v=>v==null?'–':Math.round(v).toLocaleString('en-US');
+const pct  = v=>v==null?'–':(v*100).toFixed(1)+'%';
+function tag(idx,ref){const p=Math.round((idx-1)*100);return{cls:p>=0?'tag':'tag neg',txt:(p>=0?'+':'')+p+'% '+(ref||'vs KPI')};}
+const charts = {};
+
+/* ═══════════════════════════════════════════════════════════════════
+   PHASE HELPERS
+═══════════════════════════════════════════════════════════════════ */
+const PHASES=[
+  {name:'Pre-Tease',range:'W1–W2', tint:'rgba(91,107,181,.07)', color:'#5b6bb5'},
+  {name:'Tease',    range:'W3–W4', tint:'rgba(58,167,109,.08)', color:'#2e9c63'},
+  {name:'Pre-Order',range:'W9–W10',tint:'rgba(224,153,27,.10)', color:'#e0991b'},
+  {name:'Launch',   range:'W11–W20',tint:'rgba(192,57,43,.07)', color:'#c0392b'},
+  {name:'Sustain',  range:'W21+',  tint:'rgba(126,87,194,.09)', color:'#7e57c2'}
+];
+function phaseOf(wk){const n=parseInt(String(wk).replace('W',''),10);if(n<=2)return 0;if(n<=4)return 1;if(n<=10)return 2;if(n<=20)return 3;return 4;}
+function phaseStrip(){return '<div class="phasebar">'+PHASES.map(p=>'<div class="ph" style="background:'+p.color+'"><b>'+p.name+'</b><span>'+p.range+'</span></div>').join('')+'</div>';}
+function phaseBandsPlugin(id){return{id:'phase-'+id,beforeDatasetsDraw(ch){const labels=ch.data.labels||[];if(!labels.length||!labels.every(l=>/^W\d+$/.test(l)))return;const{ctx,chartArea,scales}=ch;const xs=scales.x;const cx=k=>xs.getPixelForValue(labels[k]);ctx.save();let i=0;while(i<labels.length){const p=phaseOf(labels[i]);let j=i;while(j+1<labels.length&&phaseOf(labels[j+1])===p)j++;const left=i===0?chartArea.left:(cx(i-1)+cx(i))/2;const right=j===labels.length-1?chartArea.right:(cx(j)+cx(j+1))/2;ctx.fillStyle=PHASES[p].tint;ctx.fillRect(left,chartArea.top,right-left,chartArea.bottom-chartArea.top);i=j+1;}ctx.restore();}};}
+
+/* ═══════════════════════════════════════════════════════════════════
+   FUNNEL CHART HELPERS
+═══════════════════════════════════════════════════════════════════ */
+const STAGES=[
+  {name:'Awareness',   from:0,to:3, tint:'rgba(20,40,160,.055)', color:'#1428a0'},
+  {name:'Consideration',from:4,to:7,tint:'rgba(224,153,27,.09)', color:'#b07d12'},
+  {name:'Purchase',    from:8,to:10,tint:'rgba(180,35,24,.06)',  color:'#b42318'}
+];
+function funnelColor(idx){if(idx>=1.10)return'#0a7a44';if(idx>=1.0)return'#3aa76d';if(idx>=0.85)return'#e0991b';return'#b42318';}
+function stageAvg(s){const a=FUNNEL.slice(s.from,Math.min(s.to+1,FUNNEL.length));return a.length?a.reduce((x,f)=>x+f.idx,0)/a.length:0;}
+
+function funnelBars(id,items,stages){
+  const band={id:'band-'+id,beforeDatasetsDraw(ch){const{ctx,chartArea}=ch;const m=ch.getDatasetMeta(0).data;if(!m.length)return;ctx.save();stages.forEach((s,si)=>{const from=Math.min(s.from,m.length-1),to=Math.min(s.to,m.length-1);if(from>to)return;const top=from===0?chartArea.top:(m[from-1].y+m[from].y)/2;const bot=to===m.length-1?chartArea.bottom:(m[to].y+m[to+1].y)/2;ctx.fillStyle=s.tint;ctx.fillRect(chartArea.left,top,chartArea.right-chartArea.left,bot-top);if(si>0){ctx.strokeStyle='#dfe3ea';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(chartArea.left,top);ctx.lineTo(chartArea.right,top);ctx.stroke();}ctx.fillStyle=s.color;ctx.font='800 10px Segoe UI';ctx.textAlign='right';ctx.fillText(s.name.toUpperCase(),chartArea.right-4,top+13);});ctx.restore();}};
+  const ref={id:'ref-'+id,afterDatasetsDraw(ch){const{ctx,chartArea,scales}=ch;const x=scales.x.getPixelForValue(1);ctx.save();ctx.strokeStyle='#9aa0ab';ctx.setLineDash([5,4]);ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x,chartArea.top);ctx.lineTo(x,chartArea.bottom);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#6b7280';ctx.font='600 11px Segoe UI';ctx.textAlign='center';ctx.fillText('KPI = 1.00x',x,chartArea.bottom+30);ctx.restore();}};
+  const lbl={id:'lbl-'+id,afterDatasetsDraw(ch){const{ctx}=ch;const m=ch.getDatasetMeta(0);ctx.save();ctx.font='700 11px Segoe UI';ctx.textAlign='left';m.data.forEach((p,i)=>{ctx.fillStyle=funnelColor(items[i].idx);ctx.fillText(items[i].idx.toFixed(2)+'x',p.x+6,p.y+4);});ctx.restore();}};
+  charts[id]=new Chart(document.getElementById(id),{type:'bar',data:{labels:items.map(i=>i.label),datasets:[{data:items.map(i=>i.idx),backgroundColor:items.map(i=>funnelColor(i.idx)),borderRadius:4,barPercentage:0.7,categoryPercentage:0.82}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,layout:{padding:{right:46,top:14,bottom:14}},plugins:{legend:{display:false},tooltip:{callbacks:{title:c=>items[c[0].dataIndex].stage,label:c=>items[c.dataIndex].label+': '+c.parsed.x.toFixed(2)+'x'}}},scales:{x:{min:0,max:2,ticks:{callback:v=>v.toFixed(1)+'x'},grid:{color:'#eef0f3'}},y:{grid:{display:false},ticks:{font:{size:11.5}}}}},plugins:[band,ref,lbl]});
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CHART HELPERS
+═══════════════════════════════════════════════════════════════════ */
+function accLine(id,rows,yTitle,fmt){
+  const labels=rows.map(r=>r.week),idx=rows.map(r=>r.idx);
+  const callout={id:'c-'+id,afterDatasetsDraw(ch){const{ctx}=ch;const m=ch.getDatasetMeta(0);ctx.save();ctx.font='600 11px Segoe UI';ctx.fillStyle='#1428a0';ctx.textAlign='center';m.data.forEach((p,i)=>{if(idx[i]!=null)ctx.fillText(idx[i].toFixed(2)+'x',p.x,p.y-12);});ctx.restore();}};
+  charts[id]=new Chart(document.getElementById(id),{type:'line',data:{labels,datasets:[{label:'Actual',data:rows.map(r=>r.act_acc),borderColor:'#1428a0',backgroundColor:'rgba(20,40,160,.06)',borderWidth:3,tension:.35,pointRadius:3,pointBackgroundColor:'#1428a0',fill:true,order:1},{label:'KPI target',data:rows.map(r=>r.kpi_acc),borderColor:'#e0991b',borderWidth:2.5,tension:.35,pointRadius:2.5,pointBackgroundColor:'#e0991b',borderDash:[5,3],fill:false,order:2}]},options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+(fmt||fmtN)(c.parsed.y),afterBody:it=>idx[it[0].dataIndex]!=null?'Index: '+idx[it[0].dataIndex].toFixed(2)+'x':''}}},scales:{y:{ticks:{callback:v=>(fmt||fmtN)(v)},grid:{color:'#eef0f3'},title:{display:true,text:yTitle}},x:{grid:{display:false}}}},plugins:[phaseBandsPlugin(id),callout]});
+}
+function buzzAccLine(id,rows,yTitle){
+  const yoy=rows.map(r=>r.yoy);
+  const callout={id:'c-'+id,afterDatasetsDraw(ch){const{ctx}=ch;const m=ch.getDatasetMeta(0);ctx.save();ctx.font='600 11px Segoe UI';ctx.fillStyle='#1428a0';ctx.textAlign='center';m.data.forEach((p,i)=>{if(yoy[i]!=null)ctx.fillText(yoy[i].toFixed(2)+'x',p.x,p.y-12);});ctx.restore();}};
+  charts[id]=new Chart(document.getElementById(id),{type:'line',data:{labels:rows.map(r=>r.week),datasets:[{label:'S26F',data:rows.map(r=>r.s26_acc),borderColor:'#1428a0',backgroundColor:'rgba(20,40,160,.06)',borderWidth:3,tension:.35,pointRadius:3,pointBackgroundColor:'#1428a0',fill:true,order:1},{label:'S25F',data:rows.map(r=>r.s25_acc),borderColor:'#9aa0ab',borderWidth:2.5,tension:.35,pointRadius:2.5,pointBackgroundColor:'#9aa0ab',borderDash:[5,3],fill:false,order:2}]},options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmtN(c.parsed.y),afterBody:it=>yoy[it[0].dataIndex]!=null?'YoY: '+yoy[it[0].dataIndex].toFixed(2)+'x':''}}},scales:{y:{ticks:{callback:v=>fmtM(v)},grid:{color:'#eef0f3'},title:{display:true,text:yTitle}},x:{grid:{display:false}}}},plugins:[callout]});
+}
+function groupBars(id,rows,defs,fmt){
+  charts[id]=new Chart(document.getElementById(id),{type:'bar',data:{labels:rows.map(r=>r.week),datasets:defs.map(d=>({label:d.label,data:rows.map(r=>r[d.key]),backgroundColor:d.color,borderRadius:3,stack:d.stack}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+(fmt||fmtN)(c.parsed.y)}}},scales:{x:{grid:{display:false},stacked:!!defs[0].stack},y:{ticks:{callback:v=>(fmt||fmtN)(v)},grid:{color:'#eef0f3'},stacked:!!defs[0].stack}}},plugins:[phaseBandsPlugin(id)]});
+}
+function rateLine(id,rows,yTitle,fmt){
+  const F=fmt||pct;
+  charts[id]=new Chart(document.getElementById(id),{type:'line',data:{labels:rows.map(r=>r.week),datasets:[{label:'Actual',data:rows.map(r=>r.act),borderColor:'#1428a0',borderWidth:3,tension:.3,pointRadius:3,pointBackgroundColor:'#1428a0',spanGaps:true},{label:'Target',data:rows.map(r=>r.kpi),borderColor:'#e0991b',borderWidth:2,borderDash:[5,3],tension:.1,pointRadius:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+F(c.parsed.y)}}},scales:{y:{ticks:{callback:v=>F(v)},grid:{color:'#eef0f3'},title:{display:true,text:yTitle}},x:{grid:{display:false}}}},plugins:[phaseBandsPlugin(id)]});
+}
+function observations(items){return '<div class="panel observ"><div class="panel-head"><span class="num">\u2605</span><h2>Observations</h2></div><ul>'+items.map(i=>'<li class="'+(i.t||'')+'">'+i.x+'</li>').join('')+'</ul></div>';}
+
+/* ═══════════════════════════════════════════════════════════════════
+   RENDERERS  (identical structure to static version)
+═══════════════════════════════════════════════════════════════════ */
+function rSummary(host){
+  const sc=STAGES.map(s=>({name:s.name,avg:stageAvg(s),color:s.color}));
+  host.innerHTML=`<div class="panel first"><div class="panel-head"><span class="num">1</span><h2>Executive Summary — End-to-End Funnel</h2></div><div class="panel-sub">Index = Actual / KPI · live from Google Sheets · read top-down: first stage below 1.0x = bottleneck</div><div class="headline">Top-of-funnel results are strong — Awareness beats target. Performance narrows at each stage, with the choke point at <b style="color:#b42318">Qualified Views (QV at ${FUNNEL.find(f=>f.label.includes('QV'))?.idx.toFixed(2)||'?'}x)</b>. Average index falls stage by stage:</div><div class="stagecards">${sc.map((s,i)=>`<div class="stagecard" style="border-color:${funnelColor(s.avg)}33"><div class="st" style="color:${s.color}">${s.name}</div><div class="iv" style="color:${funnelColor(s.avg)}">${s.avg.toFixed(2)}x</div><div class="sb">avg index of stage metrics</div>${i<sc.length-1?'<div class="arrow">›</div>':''}</div>`).join('')}</div><div class="chart-box" style="height:470px"><canvas id="sum-funnel"></canvas></div><div class="legend"><span><i class="dot" style="background:#0a7a44"></i>≥1.10x</span><span><i class="dot" style="background:#3aa76d"></i>1.00–1.10x</span><span><i class="dot" style="background:#e0991b"></i>0.85–1.00x</span><span><i class="dot" style="background:#b42318"></i>&lt;0.85x</span><span style="margin-left:14px;color:#9aa0ab">Bar color = performance · shaded bands = funnel stage</span></div></div>`;
+  funnelBars('sum-funnel',FUNNEL,STAGES);
+}
+
+function rSocial(host){
+  const D=SOCIAL_TOT;
+  host.innerHTML=phaseStrip()+`<div class="panel first"><div class="panel-head"><span class="num">1</span><h2>Social Buzz — Volume & Quality (campaign total)</h2></div><div class="panel-sub">Campaign-to-date totals · Actual vs KPI</div><div class="cards"><div class="kpi hl"><div class="lbl">TOTAL BUZZ</div><div class="val">${fmtM(D.buzz_act)}</div><div class="sub">KPI ${fmtM(D.buzz_kpi)}</div><div class="${tag(D.buzz_idx).cls}">${tag(D.buzz_idx).txt}</div></div><div class="kpi"><div class="lbl">QUALITY BUZZ</div><div class="val">${fmtM(D.q_act)}</div><div class="sub">KPI ${fmtM(D.q_kpi)} · ~${Math.round(D.q_act/D.buzz_act*100)}% of total</div><div class="${tag(D.q_idx).cls}">${tag(D.q_idx).txt}</div></div><div class="kpi"><div class="lbl">% SENTIMENT (positive)</div><div class="val">${pct(D.sent_act)}</div><div class="sub">Target ${pct(D.sent_kpi)}</div><div class="${tag(D.sent_idx,'vs target').cls}">${tag(D.sent_idx,'vs target').txt}</div></div></div></div><div class="grid2 even"><div class="panel"><div class="panel-head"><span class="num">2</span><h2>Accumulated Total Buzz</h2></div><div class="panel-sub">Cumulative buzz · S26F vs S25F (incl. minigame) · YoY index</div><div class="chart-box sm"><canvas id="soc-total"></canvas></div><div class="legend"><span><i class="dot" style="background:var(--s26)"></i>S26F</span><span><i class="dot" style="background:var(--s25)"></i>S25F</span><span style="color:var(--s26)">▲ YoY index</span></div></div><div class="panel"><div class="panel-head"><span class="num">3</span><h2>Accumulated Organic Buzz</h2></div><div class="panel-sub">Cumulative buzz · S26F vs S25F (excl. minigame)</div><div class="chart-box sm"><canvas id="soc-organic"></canvas></div><div class="legend"><span><i class="dot" style="background:var(--s26)"></i>S26F</span><span><i class="dot" style="background:var(--s25)"></i>S25F</span><span style="color:var(--s26)">▲ YoY index</span></div></div></div><div class="grid2"><div class="panel"><div class="panel-head"><span class="num">4</span><h2>Outcomes — Accumulated</h2></div><div class="panel-sub">Cumulative total outcome (Paid + FOC) · Actual vs KPI</div><div class="chart-box sm"><canvas id="soc-out"></canvas></div><div class="legend"><span><i class="dot" style="background:var(--act)"></i>Actual</span><span><i class="dot" style="background:var(--kpi)"></i>KPI</span></div></div><div class="panel"><div class="panel-head"><span class="num">5</span><h2>Paid vs Earned (FOC) Outcome</h2></div><div class="panel-sub">Weekly split · Paid ${fmtN(D.paid_act)} · Earned/FOC ${fmtN(D.foc_act)} (~${Math.round(D.foc_act/(D.paid_act+D.foc_act)*100)}% earned)</div><div class="chart-box sm"><canvas id="soc-split"></canvas></div><div class="legend"><span><i class="dot" style="background:var(--act)"></i>Paid</span><span><i class="dot" style="background:var(--earn)"></i>Earned (FOC)</span></div></div></div>${observations([{t:'up',x:'<b>Total buzz '+fmtM(D.buzz_act)+' vs KPI '+fmtM(D.buzz_kpi)+' ('+D.buzz_idx.toFixed(2)+'x)</b> — most volume at launch / pre-order (W9–W11).'},{t:'up',x:'<b>Earned (FOC) '+fmtN(D.foc_act)+' vs Paid '+fmtN(D.paid_act)+' (~'+Math.round(D.foc_act/(D.paid_act+D.foc_act)*100)+'% earned)</b> — strong organic amplification.'},{x:'Accumulated YoY: total '+D.buzz_idx.toFixed(2)+'x — organic grew faster than total.'}])}`;
+  buzzAccLine('soc-total',BUZZ_TOTAL,'Accumulated buzz');
+  buzzAccLine('soc-organic',BUZZ_ORGANIC,'Accumulated organic buzz');
+  accLine('soc-out',SOCIAL_OUTCOME_ACC,'Accumulated outcomes');
+  groupBars('soc-split',SOCIAL_SPLIT,[{label:'Paid',key:'paid',color:'#1428a0',stack:'s'},{label:'Earned (FOC)',key:'foc',color:'#3aa76d',stack:'s'}]);
+}
+
+function rSMC(host){
+  const D=SMC_TOT;
+  host.innerHTML=phaseStrip()+`<div class="panel first"><div class="panel-head"><span class="num">1</span><h2>SMC — Outcomes · Accumulated</h2></div><div class="panel-sub">Cumulative # of content · Actual vs KPI</div><div class="cards"><div class="kpi"><div class="lbl">KPI TARGET (ACCUM.)</div><div class="val">${fmtN(D.out_kpi)}</div></div><div class="kpi hl"><div class="lbl">ACTUAL OUTCOMES (ACCUM.)</div><div class="val">${fmtN(D.out_act)}</div><div class="${tag(D.out_idx).cls}">${tag(D.out_idx).txt}</div></div><div class="kpi"><div class="lbl">ORGANIC ER (campaign)</div><div class="val">${pct(D.er_act)}</div><div class="sub">Target ${pct(D.er_kpi)}</div><div class="${tag(D.er_idx,'vs target').cls}">${tag(D.er_idx,'vs target').txt}</div></div></div><div class="chart-box"><canvas id="smc-acc"></canvas></div><div class="legend"><span><i class="dot" style="background:var(--act)"></i>Actual (accum.)</span><span><i class="dot" style="background:var(--kpi)"></i>KPI (accum.)</span><span style="color:var(--s26)">▲ Index</span></div></div><div class="grid2 even"><div class="panel"><div class="panel-head"><span class="num">2</span><h2>Weekly Outcome Progress</h2></div><div class="panel-sub"># of content per week</div><div class="chart-box sm"><canvas id="smc-wk"></canvas></div><div class="legend"><span><i class="dot" style="background:var(--kpi)"></i>KPI</span><span><i class="dot" style="background:var(--act)"></i>Actual</span></div></div><div class="panel"><div class="panel-head"><span class="num">3</span><h2>Organic ER % by Week</h2></div><div class="panel-sub">Weekly organic engagement rate vs target</div><div class="chart-box sm"><canvas id="smc-er"></canvas></div><div class="legend"><span><i class="dot" style="background:var(--act)"></i>Actual ER</span><span><i class="dot" style="background:var(--kpi)"></i>Target</span></div></div></div><div class="panel"><div class="panel-head"><span class="num">4</span><h2>Data Table</h2></div><div class="panel-sub">Weekly & accumulated outcomes · Index</div><table><thead><tr><th>Week</th><th>Actual acc.</th><th>KPI acc.</th><th>Index</th></tr></thead><tbody>${SMC_ACC.map(r=>'<tr><td>'+r.week+'</td><td class="acc">'+fmtN(r.act_acc)+'</td><td>'+fmtN(r.kpi_acc)+'</td><td class="idx '+(r.idx<1?'neg':'')+'">'+r.idx.toFixed(2)+'x</td></tr>').join('')}</tbody></table></div>${observations([{t:'up',x:'<b>Outcome '+fmtN(D.out_act)+' vs KPI '+fmtN(D.out_kpi)+' ('+D.out_idx.toFixed(2)+'x)</b> — execution on plan.'},{t:'up',x:'<b>Organic ER '+pct(D.er_act)+' vs target '+pct(D.er_kpi)+' ('+D.er_idx.toFixed(2)+'x)</b>.'}])}`;
+  accLine('smc-acc',SMC_ACC,'Accumulated outcomes');
+  groupBars('smc-wk',SMC_WK,[{label:'KPI',key:'kpi',color:'#f0cd8a'},{label:'Actual',key:'act',color:'#1428a0'}]);
+  rateLine('smc-er',SMC_ER_WK,'Organic ER %');
+}
+
+function rMedia(host){
+  const D=MEDIA_TOT;
+  host.innerHTML=phaseStrip()+`<div class="panel first"><div class="panel-head"><span class="num">1</span><h2>Media — Reach (campaign total)</h2></div><div class="panel-sub">Reach = de-duplicated campaign total (not accumulated) · Actual vs KPI</div><div class="cards c4"><div class="kpi hl"><div class="lbl">REACH</div><div class="val">${fmtM(D.reach_act)}</div><div class="sub">KPI ${fmtM(D.reach_kpi)}</div><div class="${tag(D.reach_idx).cls}">${tag(D.reach_idx).txt}</div></div><div class="kpi"><div class="lbl">% REACH</div><div class="val">${pct(D.reachpct_act)}</div><div class="sub">Target ${pct(D.reachpct_kpi)}</div></div><div class="kpi"><div class="lbl">QV (Qualified Views)</div><div class="val">${fmtM(D.qv_act)}</div><div class="sub">KPI ${fmtM(D.qv_kpi)}</div><div class="${tag(D.qv_idx).cls}">${tag(D.qv_idx).txt}</div></div><div class="kpi"><div class="lbl">QVR</div><div class="val">${D.qvr_act!=null?D.qvr_act.toFixed(2):'–'}</div><div class="sub">Target ${D.qvr_kpi!=null?D.qvr_kpi.toFixed(2):'–'}</div></div></div><div class="chart-box sm"><canvas id="med-reach"></canvas></div><div class="legend"><span><i class="dot" style="background:var(--kpi)"></i>KPI / week</span><span><i class="dot" style="background:var(--act)"></i>Actual / week (not cumulative)</span></div></div><div class="grid2 even"><div class="panel"><div class="panel-head"><span class="num">2</span><h2>QV by Week</h2></div><div class="panel-sub">Weekly qualified views · Actual vs KPI</div><div class="chart-box sm"><canvas id="med-qv"></canvas></div><div class="legend"><span><i class="dot" style="background:var(--kpi)"></i>KPI</span><span><i class="dot" style="background:var(--act)"></i>Actual</span></div></div><div class="panel"><div class="panel-head"><span class="num">3</span><h2>QVR by Week</h2></div><div class="panel-sub">Weekly qualified-view rate · Actual vs target</div><div class="chart-box sm"><canvas id="med-qvr"></canvas></div><div class="legend"><span><i class="dot" style="background:var(--act)"></i>Actual QVR</span><span><i class="dot" style="background:var(--kpi)"></i>Target</span></div></div></div><div class="panel"><div class="panel-head"><span class="num">4</span><h2>Conversion — Paid Order · Dot.com · Tiktok Shop</h2></div><div class="panel-sub">Order counts (campaign total) · Actual vs KPI</div><div class="cards"><div class="kpi"><div class="lbl">PAID ORDER</div><div class="val">${fmtN(D.po_act)}</div><div class="sub">KPI ${fmtN(D.po_kpi)}</div><div class="${tag(D.po_idx).cls}">${tag(D.po_idx).txt}</div></div><div class="kpi"><div class="lbl">DOT.COM</div><div class="val">${fmtN(D.dc_act)}</div><div class="sub">KPI ${fmtN(D.dc_kpi)}</div><div class="${tag(D.dc_idx).cls}">${tag(D.dc_idx).txt}</div></div><div class="kpi"><div class="lbl">TIKTOK SHOP</div><div class="val">${fmtN(D.ts_act)}</div><div class="sub">KPI ${fmtN(D.ts_kpi)}</div><div class="${tag(D.ts_idx).cls}">${tag(D.ts_idx).txt}</div></div></div><div class="chart-box sm"><canvas id="med-conv"></canvas></div></div>${observations([{t:'down',x:'<b>Reach '+fmtM(D.reach_act)+' = '+pct(D.reach_idx)+' of KPI</b>; %Reach '+pct(D.reachpct_act)+' vs '+pct(D.reachpct_kpi)+' target.'},{t:'down',x:'<b>QV only '+pct(D.qv_idx)+' of KPI ('+fmtM(D.qv_act)+' / '+fmtM(D.qv_kpi)+')</b> — the funnel bottleneck.'},{t:'down',x:'All three sales channels below KPI: Paid Order '+pct(D.po_idx)+', Dot.com '+pct(D.dc_idx)+', Tiktok Shop '+pct(D.ts_idx)+'.'}])}`;
+  groupBars('med-reach',MEDIA_REACH_WK,[{label:'KPI',key:'kpi',color:'#f0cd8a'},{label:'Actual',key:'act',color:'#1428a0'}],fmtM);
+  groupBars('med-qv',QV_WK,[{label:'KPI',key:'kpi',color:'#f0cd8a'},{label:'Actual',key:'act',color:'#1428a0'}],fmtM);
+  rateLine('med-qvr',QVR_WK,'QVR',v=>v!=null?v.toFixed(2):'–');
+  groupBars('med-conv',[{week:'Paid Order',kpi:D.po_kpi,act:D.po_act},{week:'Dot.com',kpi:D.dc_kpi,act:D.dc_act},{week:'Tiktok Shop',kpi:D.ts_kpi,act:D.ts_act}],[{label:'KPI',key:'kpi',color:'#f0cd8a'},{label:'Actual',key:'act',color:'#1428a0'}]);
+}
+
+function rINF(host){
+  const D=INF_TOT;
+  const split=[{week:'W3',paid:13,earn:62},{week:'W4',paid:10,earn:13},{week:'W9',paid:80,earn:130}];
+  host.innerHTML=phaseStrip()+`<div class="panel first"><div class="panel-head"><span class="num">1</span><h2>INF — Potential Reach · Accumulated</h2></div><div class="panel-sub">Cumulative potential reach · Actual vs KPI</div><div class="cards c5"><div class="kpi hl"><div class="lbl">POTENTIAL REACH</div><div class="val">${fmtM(D.pr_act)}</div><div class="sub">KPI ${fmtM(D.pr_kpi)}</div><div class="${tag(D.pr_idx).cls}">${tag(D.pr_idx).txt}</div></div><div class="kpi"><div class="lbl">OUTCOME (# posts)</div><div class="val">${fmtN(D.out_act)}</div><div class="sub">KPI ${fmtN(D.out_kpi)}</div><div class="${tag(D.out_idx).cls}">${tag(D.out_idx).txt}</div></div><div class="kpi"><div class="lbl"># VIEWS</div><div class="val">${fmtM(D.views_act)}</div><div class="sub">KPI ${fmtM(D.views_kpi)}</div><div class="${tag(D.views_idx).cls}">${tag(D.views_idx).txt}</div></div><div class="kpi hl"><div class="lbl">ER (engagement rate)</div><div class="val">${pct(D.er_act)}</div><div class="sub">Target ${pct(D.er_kpi)} · peak ${pct(D.er_peak)} (${D.er_peak_wk})</div><div class="${tag(D.er_idx,'vs target').cls}">${tag(D.er_idx,'vs target').txt}</div></div><div class="kpi"><div class="lbl">PAID : EARN (split data)</div><div class="val" style="font-size:21px">${fmtN(D.paid)} : ${fmtN(D.earn)}</div><div class="sub">~${Math.round(D.paid/(D.paid+D.earn)*100)}% paid · ${Math.round(D.earn/(D.paid+D.earn)*100)}% earn</div></div></div><div class="chart-box"><canvas id="inf-pr"></canvas></div><div class="legend"><span><i class="dot" style="background:var(--act)"></i>Actual (accum.)</span><span><i class="dot" style="background:var(--kpi)"></i>KPI (accum.)</span><span style="color:var(--s26)">▲ Index</span></div></div><div class="grid2 even"><div class="panel"><div class="panel-head"><span class="num">2</span><h2>Outcome — Accumulated</h2></div><div class="panel-sub">Cumulative # of posts · Actual vs KPI</div><div class="chart-box sm"><canvas id="inf-out"></canvas></div><div class="legend"><span><i class="dot" style="background:var(--act)"></i>Actual</span><span><i class="dot" style="background:var(--kpi)"></i>KPI</span></div></div><div class="panel"><div class="panel-head"><span class="num">3</span><h2>Engagement Rate (ER)</h2></div><div class="panel-sub">Weekly ER vs target</div><div class="chart-box sm"><canvas id="inf-er"></canvas></div><div class="legend"><span><i class="dot" style="background:var(--act)"></i>Actual ER</span><span><i class="dot" style="background:var(--kpi)"></i>Target</span></div></div></div><div class="panel"><div class="panel-head"><span class="num">4</span><h2>Paid vs Earned Outcome (split)</h2></div><div class="panel-sub">Split data available for W3, W4, W9</div><div class="chart-box sm"><canvas id="inf-split"></canvas></div><div class="legend"><span><i class="dot" style="background:var(--act)"></i>Paid</span><span><i class="dot" style="background:var(--earn)"></i>Earn</span></div></div>${observations([{t:'up',x:'<b>Potential Reach '+fmtM(D.pr_act)+' beats target '+fmtM(D.pr_kpi)+' ('+D.pr_idx.toFixed(2)+'x)</b> — driven by launch weeks W9–W10.'},{t:'up',x:'<b>Outcome '+fmtN(D.out_act)+' posts ('+D.out_idx.toFixed(2)+'x KPI)</b> · Views '+fmtM(D.views_act)+' ('+D.views_idx.toFixed(2)+'x).'},{x:'<b>ER '+pct(D.er_act)+' vs target '+pct(D.er_kpi)+'</b>; peak '+pct(D.er_peak)+' at '+D.er_peak_wk+'.'}])}`;
+  accLine('inf-pr',INF_PR_ACC,'Accumulated potential reach',fmtM);
+  accLine('inf-out',INF_OUTCOME_ACC,'Accumulated posts');
+  rateLine('inf-er',INF_ER_WK,'ER %');
+  groupBars('inf-split',split,[{label:'Paid',key:'paid',color:'#1428a0',stack:'s'},{label:'Earn',key:'earn',color:'#3aa76d',stack:'s'}]);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TABS SYSTEM
+═══════════════════════════════════════════════════════════════════ */
+const TABS=[
+  {key:'summary',label:'Summary',         fn:rSummary},
+  {key:'social', label:'Social Buzz',      fn:rSocial},
+  {key:'smc',    label:'SMC',              fn:rSMC},
+  {key:'media',  label:'Media',            fn:rMedia},
+  {key:'inf',    label:'INF (Influencer)', fn:rINF}
+];
+
+function buildTabs(){
+  const tabsEl=document.getElementById('tabs'), viewsEl=document.getElementById('views');
+  tabsEl.innerHTML=''; viewsEl.innerHTML='';
+  TABS.forEach((t,i)=>{
+    const tab=document.createElement('div');
+    tab.className='tab'+(i===0?' active':''); tab.dataset.k=t.key; tab.textContent=t.label;
+    tabsEl.appendChild(tab);
+    const v=document.createElement('div');
+    v.className='view'+(i===0?' active':''); v.id='view-'+t.key; viewsEl.appendChild(v);
+  });
+  document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>activate(t.dataset.k)));
+  activate('summary');
+}
+
+function activate(k){
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  document.querySelector('.tab[data-k="'+k+'"]').classList.add('active');
+  const host=document.getElementById('view-'+k); host.classList.add('active');
+  const t=TABS.find(x=>x.key===k);
+  if(!host.dataset.rendered){t.fn(host);host.dataset.rendered='1';}
+  Object.values(charts).forEach(c=>c.resize());
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   UI STATE HELPERS
+═══════════════════════════════════════════════════════════════════ */
+function showConnect(){document.getElementById('overlay').style.display='flex';document.getElementById('app').style.display='none';hideLoading();hideError();}
+function hideOverlay(){document.getElementById('overlay').style.display='none';}
+function showLoading(){document.getElementById('loading').style.display='flex';}
+function hideLoading(){document.getElementById('loading').style.display='none';}
+function showError(msg){hideLoading();document.getElementById('errMsg').textContent=msg;document.getElementById('error-wrap').style.display='flex';}
+function hideError(){document.getElementById('error-wrap').style.display='none';}
+function showApp(){document.getElementById('app').style.display='block';hideLoading();hideError();}
+
+/* ═══════════════════════════════════════════════════════════════════
+   INIT & REFRESH
+═══════════════════════════════════════════════════════════════════ */
+async function init(){
+  if(!SHEET_ID){showConnect();return;}
+  hideOverlay(); showLoading();
+  try{
+    const [weeklyRows, totalsRows, buzzRows] = await Promise.all([
+      gvizFetch('WeeklyData'),
+      gvizFetch('Totals'),
+      gvizFetch('BuzzYoY')
+    ]);
+    processData(weeklyRows, totalsRows, buzzRows);
+    // Reset chart registry and tab renders
+    Object.keys(charts).forEach(k=>{try{charts[k].destroy();}catch(e){}delete charts[k];});
+    buildTabs();
+    document.getElementById('lastUpdated').textContent='Updated '+new Date().toLocaleTimeString('en-GB')+'  ·  '+new Date().toLocaleDateString('en-GB');
+    showApp();
+  } catch(err){
+    console.error(err);
+    const hint=err.message.includes('401')||err.message.includes('403')
+      ? ' Make sure your sheet is set to "Anyone with link → Viewer".'
+      : '';
+    showError(err.message+hint);
+  }
+}
+
+async function refresh(){
+  Object.keys(charts).forEach(k=>{try{charts[k].destroy();}catch(e){}delete charts[k];});
+  await init();
+}
+
+// Boot
+if(SHEET_ID) init(); else showConnect();
+</script>
+</body>
+</html>
